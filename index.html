@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Telegram File Uploader</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    min-height: 100vh;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: linear-gradient(-45deg, #1e3c72, #2a5298, #6a11cb, #2575fc);
+    background-size: 400% 400%;
+    animation: gradientShift 15s ease infinite;
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  @keyframes gradientShift { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+  .card {
+    width: 100%; max-width: 440px;
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 24px; padding: 36px 28px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+    animation: floatIn 0.6s ease-out;
+  }
+  @keyframes floatIn { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+  .icon {
+    width: 56px; height: 56px; margin: 0 auto 16px;
+    display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, #2AABEE, #229ED9);
+    border-radius: 16px; font-size: 28px;
+    box-shadow: 0 8px 24px rgba(42, 171, 238, 0.4);
+  }
+  h1 { color: #fff; font-size: 22px; text-align: center; margin-bottom: 4px; font-weight: 600; }
+  .subtitle { color: rgba(255,255,255,0.6); text-align: center; font-size: 13px; margin-bottom: 28px; }
+  .dropzone {
+    border: 2px dashed rgba(255,255,255,0.25); border-radius: 16px;
+    padding: 32px 16px; text-align: center; cursor: pointer;
+    transition: all 0.25s ease; position: relative; overflow: hidden;
+  }
+  .dropzone:hover, .dropzone.dragover { border-color: #2AABEE; background: rgba(42, 171, 238, 0.08); transform: scale(1.01); }
+  .dropzone input { display: none; }
+  .dropzone-icon { font-size: 32px; margin-bottom: 8px; opacity: 0.7; }
+  .dropzone-text { color: rgba(255,255,255,0.75); font-size: 14px; }
+  .filename { margin-top: 14px; color: #7ee787; font-size: 13px; font-weight: 500; word-break: break-all; display: none; }
+  .field { margin-top: 18px; }
+  .field label { display: block; color: rgba(255,255,255,0.6); font-size: 12px; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .field input[type="text"] {
+    width: 100%; padding: 12px 14px; border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.06);
+    color: #fff; font-size: 14px; outline: none;
+  }
+  .field input::placeholder { color: rgba(255,255,255,0.35); }
+  .upload-btn {
+    width: 100%; margin-top: 24px; padding: 14px; border: none; border-radius: 12px;
+    background: linear-gradient(135deg, #2AABEE, #229ED9); color: #fff;
+    font-size: 15px; font-weight: 600; cursor: pointer;
+    box-shadow: 0 8px 24px rgba(42, 171, 238, 0.35);
+  }
+  .upload-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+  .progress-wrap { margin-top: 18px; height: 6px; border-radius: 6px; background: rgba(255,255,255,0.1); overflow: hidden; display: none; }
+  .progress-bar { height: 100%; width: 0%; background: linear-gradient(90deg, #2AABEE, #7ee787); border-radius: 6px; transition: width 0.2s ease; }
+  .status { margin-top: 16px; text-align: center; font-size: 13px; min-height: 18px; }
+  .status.success { color: #7ee787; }
+  .status.error { color: #ff7b7b; }
+  .status.loading { color: rgba(255,255,255,0.7); }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="icon">📤</div>
+  <h1>Telegram File Uploader</h1>
+  <p class="subtitle">Send any file straight to your chat</p>
+  <form id="uploadForm">
+    <div class="dropzone" id="dropzone">
+      <input type="file" id="fileInput" required />
+      <div class="dropzone-icon">📁</div>
+      <div class="dropzone-text">Tap to choose a file<br>or drag it here</div>
+      <div class="filename" id="filename"></div>
+    </div>
+    <div class="field">
+      <label>Chat ID</label>
+      <input type="text" id="chatId" placeholder="e.g. -1001234567890" required />
+    </div>
+    <button type="submit" class="upload-btn" id="submitBtn">Upload to Telegram</button>
+    <div class="progress-wrap" id="progressWrap">
+      <div class="progress-bar" id="progressBar"></div>
+    </div>
+    <div class="status" id="status"></div>
+  </form>
+</div>
+<script>
+  const API_URL = "https://telegram-uploader-v2.onrender.com/upload";
+
+  const form = document.getElementById("uploadForm");
+  const dropzone = document.getElementById("dropzone");
+  const fileInput = document.getElementById("fileInput");
+  const filenameEl = document.getElementById("filename");
+  const statusEl = document.getElementById("status");
+  const submitBtn = document.getElementById("submitBtn");
+  const progressWrap = document.getElementById("progressWrap");
+  const progressBar = document.getElementById("progressBar");
+
+  dropzone.addEventListener("click", () => fileInput.click());
+  fileInput.addEventListener("change", showFilename);
+
+  function showFilename() {
+    if (fileInput.files.length) {
+      filenameEl.textContent = "✓ " + fileInput.files[0].name;
+      filenameEl.style.display = "block";
+    }
+  }
+
+  function setStatus(text, type) {
+    statusEl.textContent = text;
+    statusEl.className = "status " + (type || "");
+  }
+
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const file = fileInput.files[0];
+    const chatId = document.getElementById("chatId").value;
+    if (!file || !chatId) return;
+
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("chat_id", chatId);
+
+    submitBtn.disabled = true;
+    progressWrap.style.display = "block";
+    progressBar.style.width = "0%";
+    setStatus("Uploading " + file.name + "...", "loading");
+
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", API_URL);
+    xhr.timeout = 60000;
+
+    xhr.upload.addEventListener("progress", (e) => {
+      if (e.lengthComputable) {
+        const pct = Math.round((e.loaded / e.total) * 100);
+        progressBar.style.width = pct + "%";
+        setStatus("Uploading... " + pct + "%", "loading");
+      }
+    });
+
+    xhr.onload = () => {
+      submitBtn.disabled = false;
+      if (xhr.status >= 200 && xhr.status < 300) {
+        progressBar.style.width = "100%";
+        setStatus("✓ Sent to Telegram successfully", "success");
+      } else {
+        setStatus("✗ Upload failed (" + xhr.status + "): " + xhr.responseText, "error");
+      }
+    };
+
+    xhr.onerror = () => {
+      submitBtn.disabled = false;
+      setStatus("✗ XHR error. ReadyState: " + xhr.readyState, "error");
+    };
+
+    xhr.ontimeout = () => {
+      submitBtn.disabled = false;
+      setStatus("✗ Request timed out", "error");
+    };
+
+    xhr.send(formData);
+  });
+</script>
+</body>
+</html>
