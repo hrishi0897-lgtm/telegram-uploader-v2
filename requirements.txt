@@ -1,5 +1,0 @@
-fastapi
-uvicorn[standard]
-telethon
-python-multipart
-supabase
